@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CLT Simulator & Z-Score Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+      background-color: #e25083;
+    }
+    .section {
+      display: none;
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    input, select, button {
+      margin: 8px;
+      padding: 8px;
+      font-size: 16px;
+    }
+    canvas {
+      margin-top: 20px;
+    }
+    #result {
+      font-size: 20px;
+      font-weight: bold;
+      margin-top: 15px;
+      color: #333;
+    }
+    .center-inputs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+}
+.center-inputs label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+  </style>
+</head>
+<body>
+
+  <h1>Central Limit Theorem Simulator</h1>
+
+  <label>Choose Mode:
+    <select id="modeSelect" onchange="switchMode()">
+      <option value="calculator">Z-Score Calculator (Manual Input)</option>
+      <option value="simulator">CLT Visualization (Generated Samples)</option>
+    </select>
+  </label>
+
+  <!-- Simulator Mode -->
+  <div class="section" id="simulatorSection">
+    <h2>CLT Visual Simulator</h2>
+    <label>Population Type:
+        <select id="populationType" onchange="updatePopulationInfo()">
+          <option value="uniform">Uniform [0,1]</option>
+          <option value="exponential">Exponential (λ=1)</option>
+        </select>
+    </label>
+    <p id="populationInfo" style="margin-top: 5px; font-size: 14px; color: #555;"></p>
+    <br>
+    <div class="center-inputs">
+        <label>Sample Size (n): <input type="number" id="sampleSize" min="1"></label>
+        <label>Number of Samples: <input type="number" id="numSamples" min="1"></label>
+        <!-- <label>Sample Size (n): <input type="number" id="sampleSize" value="30" min="1"></label>
+        <label>Number of Samples: <input type="number" id="numSamples" value="5000" min="1"></label> -->
+        <button onclick="simulate()">Simulate</button>
+      </div>
+      
+    <canvas id="myChart" width="800" height="400"></canvas>
+  </div>
+
+  <!-- Calculator Mode -->
+  <div class="section" id="calculatorSection">
+    <h2>Z-Score Calculator</h2>
+    <label>Sample Mean (x̄): <input type="number" id="inputMean" step="any"></label><br>
+    <label>Population Mean (μ): <input type="number" id="inputPopMean" step="any"></label><br>
+    <label>Population Std Dev (σ): <input type="number" id="inputStdDev" step="any"></label><br>
+    <label>Sample Size (n): <input type="number" id="inputN" min="1"></label><br>
+    <button onclick="calculateZ()">Calculate Z</button>
+    <div id="result"></div>
+    <canvas id="zChart" width="800" height="400"></canvas>
+  </div>
+
+  <script>
+    let chart, zChart;
+
+    function switchMode() {
+      const mode = document.getElementById('modeSelect').value;
+      document.getElementById('simulatorSection').style.display = (mode === 'simulator') ? 'block' : 'none';
+      document.getElementById('calculatorSection').style.display = (mode === 'calculator') ? 'block' : 'none';
+      if (mode === 'simulator') updatePopulationInfo();
+
+    }
+
+    switchMode(); // initialize
+
+    function randomUniform() {
+      return Math.random();
+    }
+
+    function randomExponential(lambda = 1) {
+      return -Math.log(1 - Math.random()) / lambda;
+    }
+
+    function updatePopulationInfo() {
+        const popType = document.getElementById('populationType').value;
+        const info = document.getElementById('populationInfo');
+        if (popType === 'uniform') {
+          info.textContent = "Uniform distribution: Every number between 0 and 1 has an equal chance of being selected. Used to represent completely random behavior.";
+        } else if (popType === 'exponential') {
+          info.textContent = "Exponential distribution (λ = 1): Models the time between events in a Poisson process, like time until the next customer arrives.This population contains values that mostly cluster near 0, with some large values occasionally appearing. It's skewed to the right.";
+        } else {
+          info.textContent = "";
+        }
+      }
+
+    function simulate() {
+      const sampleSize = parseInt(document.getElementById('sampleSize').value);
+      const numSamples = parseInt(document.getElementById('numSamples').value);
+      const populationType = document.getElementById('populationType').value;
+
+      let zScores = [];
+      let randomFunc;
+      let mu, sigma;
+
+      if (populationType === 'uniform') {
+        randomFunc = randomUniform;
+        mu = 0.5;
+        sigma = Math.sqrt(1 / 12);
+      } else {
+        randomFunc = randomExponential;
+        mu = 1;
+        sigma = 1;
+      }
+
+      const stdError = sigma / Math.sqrt(sampleSize);
+
+      for (let i = 0; i < numSamples; i++) {
+        let sum = 0;
+        for (let j = 0; j < sampleSize; j++) {
+          sum += randomFunc();
+        }
+        let sampleMean = sum / sampleSize;
+        let z = (sampleMean - mu) / stdError;
+        zScores.push(z);
+      }
+
+      const ctx = document.getElementById('myChart').getContext('2d');
+      const bins = 50;
+      const min = Math.min(...zScores);
+      const max = Math.max(...zScores);
+      const binWidth = (max - min) / bins;
+      let counts = new Array(bins).fill(0);
+
+      for (let z of zScores) {
+        let index = Math.floor((z - min) / binWidth);
+        if (index >= bins) index = bins - 1;
+        counts[index]++;
+      }
+
+      const labels = counts.map((_, i) => (min + i * binWidth).toFixed(2));
+
+      if (chart) {
+        chart.destroy();
+      }
+
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Z-Scores of Sample Means',
+            data: counts,
+            // backgroundColor: 'rgba(153, 102, 255, 0.6)',
+            backgroundColor: 'rgba(125, 255, 120, 0.8)',
+            borderColor: 'rgba(153, 102, 100, 10)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { title: { display: true, text: 'Z-Score' } },
+            y: { title: { display: true, text: 'Frequency' } }
+          }
+        }
+      });
+    }
+
+    function calculateZ() {
+      const xBar = parseFloat(document.getElementById('inputMean').value);
+      const mu = parseFloat(document.getElementById('inputPopMean').value);
+      const sigma = parseFloat(document.getElementById('inputStdDev').value);
+      const n = parseInt(document.getElementById('inputN').value);
+
+      if (isNaN(xBar) || isNaN(mu) || isNaN(sigma) || isNaN(n) || n <= 0 || sigma <= 0) {
+        document.getElementById('result').innerText = "❌ Please enter valid numeric values.";
+        return;
+      }
+
+      const z = (xBar - mu) / (sigma / Math.sqrt(n));
+      // document.getElementById('result').innerText = `✅ Z-Score: ${z.toFixed(4)}`;
+      const probability = normalCDF(z);
+      document.getElementById('result').innerText = `✅ Z-Score: ${z.toFixed(4)}\n📈 P(Z < ${z.toFixed(4)}) ≈ ${probability.toFixed(4)}`;
+      plotZGraph(z);
+    }
+
+    function plotZGraph(zScore) {
+      const ctx = document.getElementById('zChart').getContext('2d');
+
+      // Generate normal distribution
+      let x = [], y = [];
+      for (let i = -4; i <= 4; i += 0.1) {
+        x.push(i.toFixed(1));
+        y.push((1 / Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * i * i));
+      }
+
+      const zIndex = x.findIndex(val => parseFloat(val) >= zScore);
+
+      if (zChart) {
+        zChart.destroy();
+      }
+
+      zChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: x,
+          datasets: [
+            {
+              label: 'Standard Normal Distribution',
+              data: y,
+              fill: false,
+              borderColor: 'blue',
+              tension: 0.1
+            },
+            {
+              label: 'Z-Score',
+              data: x.map((val, idx) => idx === zIndex ? y[zIndex] : null),
+              backgroundColor: 'red',
+              pointRadius: 6,
+              pointStyle: 'rectRot',
+              type: 'line',
+              showLine: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { title: { display: true, text: 'Z-Score' } },
+            y: { title: { display: true, text: 'Probability Density' } }
+          }
+        }
+      });
+    }
+
+// Approximate CDF for standard normal distribution
+function normalCDF(z) {
+  return 0.5 * (1 + erf(z / Math.sqrt(2)));
+}
+
+// Approximate error function (erf)
+function erf(x) {
+  // Numerical approximation (Abramowitz and Stegun formula 7.1.26)
+  const sign = (x >= 0) ? 1 : -1;
+  x = Math.abs(x);
+
+  const a1 = 0.254829592;
+  const a2 = -0.284496736;
+  const a3 = 1.421413741;
+  const a4 = -1.453152027;
+  const a5 = 1.061405429;
+  const p = 0.3275911;
+
+  const t = 1 / (1 + p * x);
+  const y = 1 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+
+  return sign * y;
+}
+
+  </script>
+
+</body>
+</html>
